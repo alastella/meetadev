@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { cache, Suspense } from "react";
 import { LeaveEvent } from "@/components/OrganiserTools";
 import { AyoSays } from "@/components/Ayo";
 import { Avatar } from "@/components/Avatar";
@@ -15,10 +15,19 @@ import { CHECKIN_REQUIRED, eventBySlug, hereCount, isBanned, isHere, memberCount
 import { isAdmin } from "@/lib/organizers";
 import { INTENTS, LEVELS, ROLES, STACK } from "@/lib/options";
 import { connectionsHere, deck, directory, profileOf, suggestions, type PublicProfile } from "@/lib/people";
+import { formatDate } from "@/lib/format";
 import { jsonLd, noindex, SITE_URL } from "@/lib/site";
 
+type Host = { slug: string; name: string } | null;
+
+/** One sentence about the event for search snippets and structured data, when the organiser wrote no "about". */
+function eventSummary(e: Event, host: Host) {
+  const bits = [e.city && `in ${e.city}`, e.starts_on && `on ${formatDate(e.starts_on)}`, host && `hosted by ${host.name}`].filter(Boolean).join(", ");
+  return `${e.name}${bits ? `, ${bits}` : ""}. See who's going on meetadev and meet the mentors, learners, collaborators and teams hiring there.`;
+}
+
 // schema.org Event, so listed DevFest events can show in Google's event results.
-function eventLd(e: Event) {
+function eventLd(e: Event, host: Host) {
   if (!e.listed || !e.starts_on) return null;
   return {
     "@context": "https://schema.org",
@@ -27,22 +36,32 @@ function eventLd(e: Event) {
     startDate: e.starts_on,
     eventStatus: "https://schema.org/EventScheduled",
     eventAttendanceMode: "https://schema.org/OfflineEventAttendanceMode",
-    description: e.about || `Developer community event${e.city ? ` in ${e.city}` : ""}.`,
+    description: e.about || eventSummary(e, host),
     url: `${SITE_URL}/e/${e.slug}`,
     location: { "@type": "Place", name: e.city, address: { "@type": "PostalAddress", addressLocality: e.city } },
-    organizer: { "@type": "Organization", name: e.name.replace(/\s+\d{4}$/, ""), url: `${SITE_URL}/e/${e.slug}` },
+    organizer: host
+      ? { "@type": "Organization", name: host.name, url: `${SITE_URL}/c/${host.slug}` }
+      : { "@type": "Organization", name: e.name.replace(/\s+\d{4}$/, ""), url: `${SITE_URL}/e/${e.slug}` },
   };
 }
+
+/** The community hosting an event, for the "Hosted by" line, titles and structured data. */
+const eventHost = cache(async (e: Event): Promise<Host> =>
+  e.community_id
+    ? query<{ slug: string; name: string }>("SELECT slug, name FROM communities WHERE id = $1 AND status = 'active'", [e.community_id]).then((r) => r[0] ?? null)
+    : null,
+);
 
 const one = (v: string | string[] | undefined) => (typeof v === "string" ? v.slice(0, 80) : "");
 
 export async function generateMetadata({ params }: PageProps<"/e/[slug]">): Promise<Metadata> {
   const event = await eventBySlug((await params).slug);
   if (!event) return { title: "Event not found", ...noindex };
-  const where = event.city ? ` in ${event.city}` : "";
+  const host = await eventHost(event);
+  const when = [event.city, formatDate(event.starts_on)].filter(Boolean).join(", ");
   return {
-    title: event.name,
-    description: event.about || `Join ${event.name}${where} on meetadev and find the people you should meet: mentors, learners, collaborators and teams that are hiring.`,
+    title: when ? `${event.name} · ${when}` : event.name,
+    description: (event.about || eventSummary(event, host)).slice(0, 300),
     alternates: { canonical: `/e/${event.slug}` },
     // Organisers who hide an event from "Find events" keep it out of Google too.
     robots: event.listed ? { index: true, follow: true } : { index: false, follow: false },
@@ -56,12 +75,7 @@ export default async function EventPage({ params, searchParams }: PageProps<"/e/
   if (!event) notFound();
 
   // Independent lookups run together: each is a trip to the database.
-  const [community, me] = await Promise.all([
-    event.community_id
-      ? query<{ slug: string; name: string }>("SELECT slug, name FROM communities WHERE id = $1 AND status = 'active'", [event.community_id]).then((r) => r[0] ?? null)
-      : null,
-    currentUser(),
-  ]);
+  const [community, me] = await Promise.all([eventHost(event), currentUser()]);
   const code = one(sp.code).toUpperCase();
   const here = `/e/${slug}${code ? `?code=${encodeURIComponent(code)}` : ""}`;
   const role = me ? await membership(event.id, me.id) : null;
@@ -94,18 +108,34 @@ export default async function EventPage({ params, searchParams }: PageProps<"/e/
         <JoinEvent slug={slug} name={event.name} firstName={(me.name ?? "").split(" ")[0]} />
       );
     }
-    const ld = eventLd(event);
+    const ld = eventLd(event, community);
     return (
       <div className="event-join">
         {ld && <script type="application/ld+json" dangerouslySetInnerHTML={jsonLd(ld)} />}
         <EventHeader event={event} members={count} community={community} />
         {action}
+        {!me && <WhatHappens name={event.name} />}
         {isAdmin(me) && <Link className="btn btn--white btn--sm" href={`/e/${slug}/manage`} style={{ justifySelf: "start" }}>Organiser tools (admin)</Link>}
       </div>
     );
   }
 
   return <Directory event={event} community={community} viewerId={me.id} viewerName={me.name ?? ""} organiser={role === "organizer" || isAdmin(me)} sp={sp} />;
+}
+
+/** For visitors who haven't joined: what meetadev does at this event, in plain words. */
+function WhatHappens({ name }: { name: string }) {
+  return (
+    <section className="stack" aria-labelledby="what-h">
+      <h2 id="what-h" className="h2">At {name} with meetadev</h2>
+      <ul className="stack" style={{ paddingLeft: 20 }}>
+        <li>Make a badge once: what you do, your level and what you&apos;re here for, like finding a mentor, a job, a co-founder or people to build with.</li>
+        <li>See who else is going and swipe through the people worth meeting, with a reason for each.</li>
+        <li>Tap Meet. When they tap Meet too, you can chat and swap contacts. Nobody sees your details unless you both say yes.</li>
+      </ul>
+      <p className="muted">Free for attendees and organisers of DevFest and GDG events.</p>
+    </section>
+  );
 }
 
 async function Directory({ event, community, viewerId, viewerName, organiser, sp }: {

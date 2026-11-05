@@ -13,11 +13,13 @@ export async function generateMetadata({ params }: PageProps<"/c/[slug]">): Prom
   const c = await communityBySlug((await params).slug);
   if (!c || c.status !== "active") return { title: "Community not found", robots: { index: false, follow: false } };
   const where = [c.city, c.country].filter(Boolean).join(", ");
+  // Thousands of chapters have nothing on meetadev yet; an empty page stays out of search until it has an event.
+  const upcoming = await query("SELECT 1 FROM events WHERE community_id = $1 AND listed AND (starts_on IS NULL OR starts_on >= current_date - 1) LIMIT 1", [c.id]);
   return {
     title: `${c.name} · ${c.city}`,
-    description: `${c.name} is a ${kindLabel(c.kind).toLowerCase()} in ${where}. See its upcoming events on meetadev and meet the developers going.`,
+    description: `${c.name} (${kindLabel(c.kind)}, ${where}): see its upcoming events on meetadev and meet the developers going.`,
     alternates: { canonical: `/c/${c.slug}` },
-    robots: { index: true, follow: true },
+    robots: upcoming.length ? { index: true, follow: true } : { index: false, follow: true },
   };
 }
 

@@ -3,7 +3,8 @@ import { GetStarted } from "@/components/GetStarted";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
-// Shown in place of the landing page on someone's first visit (see proxy.ts).
+// The swipeable intro. No longer shown in place of the homepage (that showed people something different from search
+// engines); kept for direct links.
 export default function StartPage() {
   return <GetStarted />;
 }
