@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { saveProfile } from "@/lib/actions";
+import { cleanHandle, HANDLE_MAX, handleProblem } from "@/lib/handles";
 import { INTENTS, LEVELS, ROLES, STACK } from "@/lib/options";
 import type { ProfileInput } from "@/lib/validation";
 import { AyoSays, type Mood } from "./Ayo";
@@ -23,7 +24,8 @@ const STEPS: Step[] = [
   { key: "cities", say: () => "Which cities do you go to events in? I'll show you what's happening there.", mood: "thinking", valid: (p) => p.cities.length > 0 },
   { key: "intents", say: () => "What are you hoping to get from events like this? Pick all that fit.", valid: (p) => p.intents.length > 0 },
   { key: "stack", say: () => "What do you work with, or want to learn? I'll match you with people who share it.", mood: "thinking", valid: () => true },
-  { key: "about", say: () => "Give people a one-line hello so they know who to look out for.", valid: (p) => p.name.trim().length >= 2 },
+  { key: "about", say: () => "Give people a one-line hello so they know who to look out for.",
+    valid: (p) => p.name.trim().length >= 2 && !handleProblem(cleanHandle(p.handle)) },
   { key: "contact", say: () => "How should your connections reach you? Only people you both want to meet will see this.", mood: "wink",
     valid: (p) => !!(p.whatsapp || p.phone || p.contact_email) },
   { key: "links", say: () => "Last one! Public links people at your events can see. All optional.", mood: "excited", valid: () => true },
@@ -77,7 +79,10 @@ export function Onboarding({ initial, editing, next, citySuggestions }: {
     start(async () => {
       try { sessionStorage.removeItem(DRAFT); } catch {}
       const res = await saveProfile(p, next);
-      if (res?.error) setError(res.error);
+      if (!res?.error) return;
+      setError(res.error);
+      // A username problem (usually "taken") is fixed on the step that has the field.
+      if (/username/i.test(res.error)) { setDir(-1); setI(STEPS.findIndex((s) => s.key === "about")); }
     });
 
   const slide = still ? {} : { x: dir * 40 };
@@ -154,6 +159,10 @@ export function Onboarding({ initial, editing, next, citySuggestions }: {
             {step.key === "about" && (
               <div className="stack">
                 <Field id="name" label="Name" value={p.name} onChange={(v) => set("name", v)} max={60} autoComplete="name" />
+                <Field id="handle" label="Username" value={p.handle} max={HANDLE_MAX} autoComplete="off"
+                  onChange={(v) => set("handle", v.toLowerCase().replace(/\s+/g, "-"))}
+                  hint={(p.handle && handleProblem(cleanHandle(p.handle))) ||
+                    `meetadev.xyz/p/${cleanHandle(p.handle) || "your-name"}. Changing it changes your profile link and badge QR.`} />
                 <Field id="headline" label="One-line intro" hint="e.g. Flutter dev at a fintech, CS student at Unilorin" value={p.headline} onChange={(v) => set("headline", v)} max={80} />
                 <div className="field">
                   <label htmlFor="bio">A little more about you</label>

@@ -59,23 +59,33 @@ export async function saveProfile(input: ProfileInput, next: string): Promise<Fo
   if (!p.whatsapp && !p.phone && !p.contact_email)
     return { error: "Add at least one way to reach you, so your connections can say hi." };
 
+  const taken = await query("SELECT 1 FROM profiles WHERE handle = $1 AND user_id <> $2", [p.handle, me.id]);
+  if (taken.length) return { error: `@${p.handle} is taken. Try another username.` };
+
   const strip = (v: string, re: RegExp) => v.replace(re, "").replace(/\/$/, "");
-  await query(
-    `UPDATE profiles SET name = $2, headline = $3, bio = $4, role = $5, level = $6, intents = $7, stack = $8,
-            whatsapp = $9, phone = $10, contact_email = $11, linkedin = $12, github = $13, x_handle = $14,
-            website = $15, listed = $16, cities = $17, onboarded = true, updated_at = now()
-      WHERE user_id = $1`,
-    [
-      me.id, p.name, p.headline, p.bio, p.role, p.level, p.intents, p.stack,
-      p.whatsapp, p.phone, p.contact_email,
-      strip(p.linkedin, /^(https?:\/\/)?(www\.)?linkedin\.com\/in\//i),
-      strip(p.github, /^(https?:\/\/)?(www\.)?github\.com\//i).replace(/^@/, ""),
-      strip(p.x_handle, /^(https?:\/\/)?(www\.)?(x|twitter)\.com\//i).replace(/^@/, ""),
-      p.website,
-      p.listed,
-      tidyCities(p.cities),
-    ],
-  );
+  try {
+    await query(
+      `UPDATE profiles SET name = $2, headline = $3, bio = $4, role = $5, level = $6, intents = $7, stack = $8,
+              whatsapp = $9, phone = $10, contact_email = $11, linkedin = $12, github = $13, x_handle = $14,
+              website = $15, listed = $16, cities = $17, handle = $18, onboarded = true, updated_at = now()
+        WHERE user_id = $1`,
+      [
+        me.id, p.name, p.headline, p.bio, p.role, p.level, p.intents, p.stack,
+        p.whatsapp, p.phone, p.contact_email,
+        strip(p.linkedin, /^(https?:\/\/)?(www\.)?linkedin\.com\/in\//i),
+        strip(p.github, /^(https?:\/\/)?(www\.)?github\.com\//i).replace(/^@/, ""),
+        strip(p.x_handle, /^(https?:\/\/)?(www\.)?(x|twitter)\.com\//i).replace(/^@/, ""),
+        p.website,
+        p.listed,
+        tidyCities(p.cities),
+        p.handle,
+      ],
+    );
+  } catch (error) {
+    // Someone else took the username between the check and the save.
+    if ((error as { code?: string }).code === "23505") return { error: `@${p.handle} is taken. Try another username.` };
+    throw error;
+  }
   if (!me.onboarded) await track(me.id, "badge created");
   revalidatePath("/", "layout");
   redirect(me.onboarded ? "/me?saved=1" : `/welcome?next=${encodeURIComponent(safeNext(next))}`);

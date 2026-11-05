@@ -14,7 +14,7 @@ export default async function OnboardingPage({ searchParams }: PageProps<"/onboa
   if (!me) redirect(`/login?next=${encodeURIComponent("/onboarding")}`);
   const p = await profileOf(me.id);
   const initial = {
-    name: p?.name ?? "", headline: p?.headline ?? "", bio: p?.bio ?? "",
+    name: p?.name ?? "", handle: p?.handle ?? "", headline: p?.headline ?? "", bio: p?.bio ?? "",
     role: p?.role ?? "", level: p?.level ?? "", intents: p?.intents ?? [], stack: p?.stack ?? [], cities: p?.cities ?? [],
     whatsapp: p?.whatsapp ?? "", phone: p?.phone ?? "", contact_email: p?.contact_email || me.email,
     linkedin: p?.linkedin ?? "", github: p?.github ?? "", x_handle: p?.x_handle ?? "", website: p?.website ?? "",

@@ -41,6 +41,7 @@ export default async function MePage({ searchParams }: PageProps<"/me">) {
           <div className="stack" style={{ justifyItems: "center", textAlign: "center", "--gap": "8px" } as React.CSSProperties}>
             <Avatar name={p.name} color={p.color} photo={p.photo_url} size={72} />
             <h1 className="h2">{p.name}</h1>
+            <p className="mono muted">@{p.handle}</p>
             <p className="muted">{p.headline || roleLine(p.role, p.level)}</p>
             <IntentChips intents={p.intents} max={3} />
           </div>

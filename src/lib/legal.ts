@@ -5,7 +5,7 @@ export const LEGAL = {
   /** Where privacy and legal requests go. The mailbox must exist and be read. */
   email: "hello@meetadev.xyz",
   /** Shown as "Last updated" on every legal page. Change it whenever a page changes. */
-  updated: "26 October 2026",
+  updated: "5 November 2026",
   country: "Nigeria",
   regulator: { name: "Nigeria Data Protection Commission (NDPC)", url: "https://ndpc.gov.ng" },
   /** How long to answer a privacy request. */

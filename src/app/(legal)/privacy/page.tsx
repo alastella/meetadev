@@ -111,6 +111,11 @@ export default function PrivacyPage() {
           <li><b>PostHog:</b> product analytics and screen replays, as described above.</li>
           <li><b>Your browser&apos;s push service</b> (for example Google, Apple or Mozilla): delivering notifications you turned on, which can include a short preview of a message.</li>
         </ul>
+        <p id="partners">
+          <b>Event apps we partner with</b> (such as Faaji, which runs quests at DevFest events) can check a meetadev username you give
+          them, for example to complete a quest. We tell them only whether it belongs to a finished profile and whether you&apos;ve joined
+          their event: never your name, contact details, connections or messages.
+        </p>
         <p>
           Some of these providers store or process data outside {LEGAL.country}, including in the United States. Where that happens we
           rely on their contractual and security commitments to protect it as the law requires.

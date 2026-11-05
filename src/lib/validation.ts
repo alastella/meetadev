@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { cleanHandle, handleProblem } from "./handles";
 import { intentIds, levelIds, roleIds, STACK } from "./options";
 
 const trimmed = (max: number) => z.string().trim().max(max);
@@ -18,6 +19,10 @@ const handleLike = (label: string) =>
 
 export const profileSchema = z.object({
   name: z.string().trim().min(2, "Tell us your name.").max(60),
+  handle: z.string().transform(cleanHandle).superRefine((v, ctx) => {
+    const problem = handleProblem(v);
+    if (problem) ctx.addIssue({ code: "custom", message: problem });
+  }),
   headline: trimmed(80),
   bio: trimmed(280),
   role: z.enum(roleIds, { message: "Pick what you do." }),
